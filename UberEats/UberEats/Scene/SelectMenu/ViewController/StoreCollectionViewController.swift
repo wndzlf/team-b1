@@ -12,65 +12,39 @@ import DependencyContainer
 import ServiceInterface
 
 class StoreCollectionViewController: UICollectionViewController {
-    private var categorys: [String] = []
 
-    func passingData(status: SelectState) {
-        switch status {
-        case .store(let storeId):
-            self.storeId = storeId
-        case .food(foodId: let foodId, storeId: let storeId):
-            self.storeId = storeId
-            self.foodId = foodId
-        }
-    }
-
+    private var totalPrice = 0
+    private var orderFoods: [OrderInfoModel] = []
     private var storeService: StoreService = DependencyContainer.share.getDependency(key: .storeService)
     private var foodsService: FoodsService = DependencyContainer.share.getDependency(key: .foodsService)
 
-    var storeId: String?
-    var foodId: String?
-
-    var orderFoods: [OrderInfoModel] = []
-    private var store: Store?
-    private var foods: [Food] = [] {
-        didSet {
-            foods.forEach {
-                if let imageURL = URL(string: $0.lowImageURL) {
-                    ImageNetworkManager.shared.getImageByCache(imageURL: imageURL) { (_, error) in
-                        if error != nil {
-                            return
-                        }
-
-                        self.dataIndicator.stopAnimating()
-                        self.collectionView.isScrollEnabled = true
-                    }
-                }
-            }
-        }
-    }
-
-    private var foodsOfCategory: [String: [Food]] = [:]
-
-    private var statusBarStyle: UIStatusBarStyle = .lightContent
-    private var lastSection: Int = 3
     private let padding: CGFloat = 5
 
-    private var isLiked: Bool = false
-    private var isScrolling: Bool = false
-    private var isChangedSection: Bool = false
+    var storeId: String?
+    var foodId: String?
+    var statusBarStyle: UIStatusBarStyle = .lightContent
+    var lastSection: Int = 3
+    var isLiked: Bool = false
+    var isScrolling: Bool = false
+    var isChangedSection: Bool = false
+    var floatingViewLeadingConstraint = NSLayoutConstraint()
+    var floatingViewWidthConstraint = NSLayoutConstraint()
+    var storeTitleView = StoreTitleView()
+    lazy var floatingView = FloatingView()
 
-    private var identifier = ""
+    let backButton = UIButton().initButtonWithImage("arrow")
+    let likeButton = UIButton().initButtonWithImage("like")
 
-    private var floatingViewLeadingConstraint = NSLayoutConstraint()
-    private var floatingViewWidthConstraint = NSLayoutConstraint()
+    override var preferredStatusBarStyle: UIStatusBarStyle {
+        return statusBarStyle
+    }
 
-    private let floatingView = FloatingView()
-    private var storeTitleView = StoreTitleView()
-    private let backButton = UIButton().initButtonWithImage("arrow")
-    private let likeButton = UIButton().initButtonWithImage("like")
-
-    private let sectionHeader = UICollectionView.elementKindSectionHeader
-    private let sectionFooter = UICollectionView.elementKindSectionFooter
+    lazy var moveCartView: MoveCartView = {
+        let view = MoveCartView()
+        view.moveCartButton.orderButtonClickable = self
+        view.isHidden = true
+        return view
+    }()
 
     lazy var dataIndicator: UIActivityIndicatorView = {
         let indicator = UIActivityIndicatorView()
@@ -84,17 +58,30 @@ class StoreCollectionViewController: UICollectionViewController {
         return indicator
     }()
 
+    var menuBarDataSource: MenuCollectionViewDataSource? {
+        didSet {
+            menuBarCollectionView.reloadData()
+        }
+    }
+
+    var mainCollectionViewDataSource: MainCollectionViewDataSource? {
+        didSet {
+            collectionView.reloadData()
+        }
+    }
+
     lazy var menuBarCollectionView: UICollectionView = {
         let layout = UICollectionViewFlowLayout()
         layout.scrollDirection = .horizontal
         layout.minimumInteritemSpacing = ValuesForCollectionView.menuBarMinSpacing
 
-        let collectionView = UICollectionView(frame: CGRect.zero, collectionViewLayout: layout)
+        let collectionView = UICollectionView(frame: CGRect.zero,
+                                              collectionViewLayout: layout)
+        collectionView.decelerationRate = UIScrollView.DecelerationRate(rawValue: 0.9700)
         collectionView.translatesAutoresizingMaskIntoConstraints = false
         collectionView.showsHorizontalScrollIndicator = false
         collectionView.backgroundColor = .white
         collectionView.delegate = self
-        collectionView.dataSource = self
         collectionView.alpha = ValuesForCollectionView.menuBarZeroAlpha
         collectionView.contentInset = UIEdgeInsets(top: ValuesForCollectionView.menuBarZeroInset,
                                                    left: ValuesForCollectionView.menuBarLeftInset,
@@ -105,10 +92,20 @@ class StoreCollectionViewController: UICollectionViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-
         setupData()
         setupLayout()
         setupCollectionViewLayout()
+        collectionView.dataSource = mainCollectionViewDataSource
+    }
+
+    func passingData(status: SelectState) {
+        switch status {
+        case .store(let storeId):
+            self.storeId = storeId
+        case .food(foodId: let foodId, storeId: let storeId):
+            self.storeId = storeId
+            self.foodId = foodId
+        }
     }
 
     // MARK: - Method
@@ -120,46 +117,43 @@ class StoreCollectionViewController: UICollectionViewController {
             return
         }
 
-        storeService.requestStore(query: storeId, dispatchQueue: DispatchQueue.global()) { [weak self] (response) in
-            if response.isSuccess {
-                guard let store = response.value?.store else {
+        storeService.requestStore(storeId: storeId,
+                                  dispatchQueue: .global()) { [weak self] (response) in
+            guard response.isSuccess,
+                let store = response.value?.store else {
                     return
-                }
-
-                self?.storeTitleView.store = store
-                self?.store = store
-
-                self?.collectionView.reloadData()
-            } else {
-                fatalError()
             }
-        }
 
-        foodsService.requestFoods(query: storeId, dispatchQueue: DispatchQueue.global()) { [weak self] (response) in
-            if response.isSuccess {
-                guard let foods = response.value?.foods else {
-                    return
+            self?.storeTitleView.configure(store: store)
+
+            self?.foodsService.requestFoods(storeId: storeId,
+                                            dispatchQueue: .global()) { [weak self] (response) in
+                guard response.isSuccess,
+                    let foods = response.value?.foods else {
+                        return
                 }
 
-                self?.foods = foods
-                self?.seperateCategory()
+                let info: (foods: [String], categories: [String: [FoodForView]]) = seperateCategory(foods: foods)
 
-                self?.collectionView.reloadData()
-                self?.menuBarCollectionView.reloadData()
+                self?.menuBarDataSource = MenuCollectionViewDataSource(categorys: info.foods)
+                self?.menuBarCollectionView.dataSource = self?.menuBarDataSource
+
+                self?.mainCollectionViewDataSource = MainCollectionViewDataSource(store: store,
+                                                                                  foods: foods,
+                                                                                  categorys: info.foods,
+                                                                                  categoryOfFood: info.categories)
+                self?.collectionView.dataSource = self?.mainCollectionViewDataSource
 
                 self?.setupFloatingView()
                 self?.setupCollectionView()
                 self?.pushFoodDetail()
-            } else {
-                fatalError()
+                self?.dataIndicator.stopAnimating()
+                self?.collectionView.isScrollEnabled = true
             }
         }
     }
 
     private func setupLayout() {
-        navigationController?.navigationBar.isHidden = true
-        tabBarController?.tabBar.isHidden = true
-
         storeTitleView = StoreTitleView(view)
 
         collectionView.addSubview(storeTitleView)
@@ -167,6 +161,7 @@ class StoreCollectionViewController: UICollectionViewController {
         view.addSubview(backButton)
         view.addSubview(likeButton)
         view.addSubview(menuBarCollectionView)
+        view.addSubview(moveCartView)
         menuBarCollectionView.addSubview(floatingView)
 
         storeTitleView.setupConstraint()
@@ -194,50 +189,48 @@ class StoreCollectionViewController: UICollectionViewController {
             likeButton.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor,
                                                  constant: -ValuesForButton.likeTrailingConstant),
             likeButton.widthAnchor.constraint(equalToConstant: buttonSize),
-            likeButton.heightAnchor.constraint(equalToConstant: buttonSize)
+            likeButton.heightAnchor.constraint(equalToConstant: buttonSize),
+
+            moveCartView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            moveCartView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            moveCartView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            moveCartView.heightAnchor.constraint(equalToConstant: 85)
             ])
     }
 
     private func setupCollectionView() {
         let selectedIndexPath = IndexPath(item: 0, section: 0)
-        menuBarCollectionView.selectItem(at: selectedIndexPath, animated: false, scrollPosition: .centeredVertically)
+        menuBarCollectionView.selectItem(at: selectedIndexPath,
+                                         animated: false,
+                                         scrollPosition: .centeredVertically)
 
         collectionView.showsVerticalScrollIndicator = false
         collectionView.backgroundColor = .white
 
         // header
-        collectionView.register(StretchyHeaderView.self,
-                                forSupplementaryViewOfKind: sectionHeader,
-                                withReuseIdentifier: CellId.stretchyHeader.rawValue)
+        collectionView.register(StretchyHeaderView.self, kind: ElementKind.sectionHeader)
 
-        collectionView.register(TempCollectionReusableView.self,
-                                forSupplementaryViewOfKind: sectionHeader,
-                                withReuseIdentifier: CellId.tempHeader.rawValue)
+        collectionView.register(TempCollectionReusableView.self, kind: ElementKind.sectionHeader)
 
-        menuBarCollectionView.register(TempCollectionReusableView.self,
-                                       forSupplementaryViewOfKind: sectionHeader,
-                                       withReuseIdentifier: CellId.tempHeader.rawValue)
+        menuBarCollectionView.register(TempCollectionReusableView.self, kind: ElementKind.sectionHeader)
 
         // footer
-        collectionView.register(TempCollectionReusableView.self,
-                                forSupplementaryViewOfKind: sectionFooter,
-                                withReuseIdentifier: CellId.tempFooter.rawValue)
+        collectionView.register(TempCollectionReusableView.self, kind: ElementKind.sectionFooter)
 
         // cell
-        collectionView.register(FoodCollectionViewCell.self, forCellWithReuseIdentifier: CellId.menuDetail.rawValue)
-        collectionView.register(UICollectionViewCell.self, forCellWithReuseIdentifier: CellId.temp.rawValue)
+        collectionView.register(FoodCollectionViewCell.self)
 
         let timeAndLocationNib = UINib(nibName: XibName.timeAndLocation.rawValue, bundle: nil)
-        self.collectionView.register(timeAndLocationNib, forCellWithReuseIdentifier: CellId.timeAndLocation.rawValue)
+        collectionView.register(nib: timeAndLocationNib, TimeAndLocationCollectionViewCell.self)
 
         let menuNib = UINib(nibName: XibName.search.rawValue, bundle: nil)
-        self.collectionView.register(menuNib, forCellWithReuseIdentifier: CellId.menu.rawValue)
+        collectionView.register(nib: menuNib, SearchCollectionViewCell.self)
 
         let menuCategoryNib = UINib(nibName: XibName.menuCategory.rawValue, bundle: nil)
-        menuBarCollectionView.register(menuCategoryNib, forCellWithReuseIdentifier: CellId.menuCategory.rawValue)
+        menuBarCollectionView.register(nib: menuCategoryNib, MenuCategoryCollectionViewCell.self)
 
         let menuSectionNib = UINib(nibName: XibName.menuSection.rawValue, bundle: nil)
-        self.collectionView.register(menuSectionNib, forCellWithReuseIdentifier: CellId.menuSection.rawValue)
+        collectionView.register(nib: menuSectionNib, MenuSectionCollectionViewCell.self)
 
     }
 
@@ -248,14 +241,18 @@ class StoreCollectionViewController: UICollectionViewController {
     }
 
     private func setupFloatingView() {
+        guard let category = menuBarDataSource?.categorys[0] else {
+            return
+        }
+
         floatingViewWidthConstraint = NSLayoutConstraint(item: floatingView,
                                                             attribute: .width,
                                                             relatedBy: .equal,
                                                             toItem: nil,
                                                             attribute: .width,
                                                             multiplier: ValuesForFloatingView.fullMultiplier,
-                                                            constant: categorys[0].estimateCGRect.width
-                                                                + ValuesForFloatingView.widthPadding + 20)
+                                                            constant: category.estimateCGRect.width
+                                                                + ValuesForFloatingView.widthPadding)
         floatingViewWidthConstraint.isActive = true
 
         floatingViewLeadingConstraint = NSLayoutConstraint(item: floatingView,
@@ -268,64 +265,47 @@ class StoreCollectionViewController: UICollectionViewController {
         floatingViewLeadingConstraint.isActive = true
 
         NSLayoutConstraint.activate([
-            floatingView.centerYAnchor.constraint(equalTo: self.menuBarCollectionView.centerYAnchor),
+            floatingView.centerYAnchor.constraint(equalTo: menuBarCollectionView.centerYAnchor),
             floatingView.heightAnchor.constraint(equalToConstant: ValuesForFloatingView.heightConstant)
             ])
     }
 
-    private func seperateCategory() {
-        foods.forEach {
-            if !foodsOfCategory.keys.contains($0.categoryId) {
-                foodsOfCategory.updateValue([], forKey: $0.categoryId)
-                categorys.append($0.categoryName)
-            }
-
-            foodsOfCategory[$0.categoryId]?.append($0)
-        }
-    }
-
     private func pushFoodDetail() {
         if foodId != nil {
-            let storyboard = UIStoryboard(name: "FoodItemDetails", bundle: nil)
-            let foodDetailsViewController = storyboard.instantiateViewController(withIdentifier: "FoodItemDetailsVC") as! FoodItemDetailsViewController
+            let foodOptionStoryboard = UIStoryboard(name: "FoodItemDetails", bundle: nil)
+            guard let foodOptionViewController
+                = foodOptionStoryboard.instantiateViewController(withIdentifier: "FoodItemDetailsVC")
+                as? FoodItemDetailsViewController else {
+                    return
+            }
 
-//            guard let store = store else {
-//                return
-//            }
-//
-//            var price: Int = 0
-//            var foodName: String = ""
-//
-//            foods.forEach {
-//                if foodId == $0.id {
-//                    price = $0.basePrice
-//                    foodName = $0.foodName
-//                }
-//            }
-//
-//            let storeInfo = StoreInfoModel.init(name: store.name, deliveryTime: store.deliveryTime)
-//            let deliveryInfoModel = DeilveryInfoModel.init(locationImage: "https://github.com/boostcamp3-iOS/team-b1/blob/master/images/FoodMarket/airInTheCafe.jpeg?raw=true",
-//                                                           detailedAddress: "서울특별시 강남구 역삼1동 강남대로 382",
-//                                                           address: "메리츠 타워",
-//                                                           deliveryMethod: .pickUpOutside,
-//                                                           roomNumber: 101)
-//
-//            let cartModel = CartModel.init(storeInfo: storeInfo, deilveryInfo: deliveryInfoModel, foodOrderedInfo: nil)
-//
-//            cartViewController.cartModel = cartModel
-//            cartViewController.orderInfoModels = [OrderInfoModel.init(amount: 1,
-//                                                                      orderName: foodName,
-//                                                                      price: price)]
+            var selectedFood: FoodForView?
 
-            self.navigationController?.pushViewController(foodDetailsViewController, animated: true)
-            //            self.present(cartViewController, animated: true, completion: nil)
+            mainCollectionViewDataSource?.foods.forEach {
+                if foodId == $0.id {
+                    selectedFood = $0
+                }
+            }
+
+            guard let food = selectedFood else {
+                return
+            }
+
+            foodOptionViewController.foodSelectable = self
+
+            foodOptionViewController.foodInfo = FoodInfoModel(name: food.foodName,
+                                                              supportingExplanation: food.foodDescription,
+                                                              price: food.basePrice,
+                                                              imageURL: food.foodImageURL)
+
+            navigationController?.pushViewController(foodOptionViewController, animated: true)
         }
     }
 
     // Object-C Method
     @objc private func touchUpBackButton(_: UIButton) {
         tabBarController?.tabBar.isHidden = false
-        self.navigationController?.popViewController(animated: true)
+        navigationController?.popViewController(animated: true)
     }
 
     @objc private func touchUpLikeButton(_ sender: UIButton) {
@@ -334,402 +314,20 @@ class StoreCollectionViewController: UICollectionViewController {
 
         isLiked = !isLiked
     }
-
-    override var preferredStatusBarStyle: UIStatusBarStyle {
-        return statusBarStyle
-    }
-
-    // MARK: - DataSource
-    override func numberOfSections(in collectionView: UICollectionView) -> Int {
-        if collectionView == self.menuBarCollectionView {
-            return NumberOfSection.menuBar.rawValue
-        } else {
-            guard let numberOfCategory: Int = store?.numberOfCategory else {
-                return 0
-            }
-            return numberOfCategory + DistanceBetween.menuAndRest
-        }
-    }
-
-    override func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
-        if collectionView == self.menuBarCollectionView {
-            return categorys.count
-        }
-
-        switch section {
-        case 0, 1, 2:
-            return basicNumberOfItems
-        default:
-            let categoryId: String = "category" + String(section - DistanceBetween.menuAndRest + 1)
-            guard let food = foodsOfCategory[categoryId]?.count else {
-                return 0
-            }
-            return food + DistanceBetween.titleAndFoodCell
-        }
-    }
-
-    override func collectionView(_ collectionView: UICollectionView,
-                                 cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
-        if collectionView == self.menuBarCollectionView {
-            guard let cell = collectionView.dequeueReusableCell(withReuseIdentifier: CellId.menuCategory.rawValue,
-                                                                for: indexPath) as? MenuCategoryCollectionViewCell else {
-                return .init()
-            }
-
-            collectionView.sendSubviewToBack(floatingView)
-
-            cell.sectionName = categorys[indexPath.item]
-            cell.setColor(by: collectionView.indexPathsForSelectedItems?.contains(indexPath) ?? false)
-
-            return cell
-        }
-
-        switch indexPath.section {
-        case 0:
-            identifier = CellId.temp.rawValue
-        case 1:
-            identifier = CellId.timeAndLocation.rawValue
-        case 2:
-            guard let cell = collectionView.dequeueReusableCell(withReuseIdentifier: CellId.menu.rawValue,
-                                                                for: indexPath) as? SearchCollectionViewCell else {
-                                                                    return .init()
-            }
-
-            cell.searchBarDelegate = self
-
-            return cell
-        default:
-            switch indexPath.item {
-            case 0:
-                guard let cell = collectionView.dequeueReusableCell(withReuseIdentifier: CellId.menuSection.rawValue,
-                                                                    for: indexPath) as? MenuSectionCollectionViewCell else {
-                    return .init()
-                }
-
-                cell.menuLabel.text = categorys[indexPath.section - DistanceBetween.menuAndRest]
-
-                return cell
-            default:
-                guard let cell = collectionView.dequeueReusableCell(withReuseIdentifier: CellId.menuDetail.rawValue,
-                                                                    for: indexPath) as? FoodCollectionViewCell else {
-                                                                        return .init()
-                }
-
-                let categoryId: String = "category" + String(indexPath.section - DistanceBetween.menuAndRest + 1)
-                let foodIndex: Int = indexPath.item - DistanceBetween.titleAndFoodCell
-
-                guard let food: Food = foodsOfCategory[categoryId]?[foodIndex] else {
-                    return .init()
-                }
-
-                cell.priceLabelBottomConstraint.isActive = (food.foodDescription == "") ? false : true
-                cell.foodImageViewWidthConstraint.constant = (food.lowImageURL == "") ? 0 : 100
-
-                cell.food = food
-
-                guard let imageURL = URL(string: food.lowImageURL) else {
-                    return cell
-                }
-
-                ImageNetworkManager.shared.getImageByCache(imageURL: imageURL) { (image, error) in
-                    if error != nil {
-                        return
-                    }
-
-                    cell.foodImageView.image = image
-                }
-
-                return cell
-            }
-        }
-        return collectionView.dequeueReusableCell(withReuseIdentifier: identifier, for: indexPath)
-    }
-
-    override func collectionView(_ collectionView: UICollectionView,
-                                 viewForSupplementaryElementOfKind kind: String,
-                                 at indexPath: IndexPath) -> UICollectionReusableView {
-
-        if kind == UICollectionView.elementKindSectionHeader {
-            if collectionView == self.menuBarCollectionView {
-                let header = collectionView.dequeueReusableSupplementaryView(ofKind: kind,
-                                                                             withReuseIdentifier: CellId.tempHeader.rawValue,
-                                                                             for: indexPath)
-                return header
-            }
-
-            switch indexPath.section {
-            case 0:
-                guard let header = collectionView.dequeueReusableSupplementaryView(ofKind: kind,
-                                                                                   withReuseIdentifier: CellId.stretchyHeader.rawValue,
-                                                                                   for: indexPath) as? StretchyHeaderView else {
-                    return .init()
-                }
-
-                guard let imageURLString = store?.mainImage,
-                    let imageURL = URL(string: imageURLString) else {
-                        return header
-                }
-
-                ImageNetworkManager.shared.getImageByCache(imageURL: imageURL) { (image, error) in
-                    if error != nil {
-                        return
-                    }
-
-                    header.headerImageView.image = image
-                }
-
-                return header
-
-            case 1, 2:
-                identifier = CellId.tempHeader.rawValue
-            default:
-                return collectionView.dequeueReusableSupplementaryView(ofKind: kind,
-                                                                       withReuseIdentifier: CellId.tempHeader.rawValue,
-                                                                       for: indexPath)
-            }
-        } else {
-            if collectionView == self.collectionView {
-                guard let footer = collectionView.dequeueReusableSupplementaryView(ofKind: kind,
-                                                                       withReuseIdentifier: CellId.tempFooter.rawValue,
-                                                                       for: indexPath) as? TempCollectionReusableView else {
-                    return .init()
-                }
-
-                footer.backgroundColor = #colorLiteral(red: 0.8638877273, green: 0.8587527871, blue: 0.8678352237, alpha: 1)
-
-                return footer
-            }
-        }
-
-        return collectionView.dequeueReusableSupplementaryView(ofKind: kind,
-                                                               withReuseIdentifier: identifier,
-                                                               for: indexPath)
-    }
-
-    // MARK: - Delegate
-    func collectionView(_ collectionView: UICollectionView,
-                        layout collectionViewLayout: UICollectionViewLayout,
-                        referenceSizeForHeaderInSection section: Int) -> CGSize {
-
-        if collectionView == self.menuBarCollectionView {
-            return .init(width: 0, height: HeightsOfHeader.menuBarAndMenu)
-        }
-
-        switch section {
-        case 0:
-            return .init(width: self.view.frame.width,
-                         height: HeightsOfHeader.stretchy)
-        default:
-            return .init(width: self.view.frame.width,
-                         height: HeightsOfHeader.food)
-        }
-    }
-
-    func collectionView(_ collectionView: UICollectionView,
-                        layout collectionViewLayout: UICollectionViewLayout,
-                        referenceSizeForFooterInSection section: Int) -> CGSize {
-        if section > 2 {
-            return .init(width: self.view.frame.width,
-                         height: 0.5)
-        }
-
-        return .init(width: 0, height: 0)
-    }
-
-    override func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
-        if collectionView == self.menuBarCollectionView {
-
-            movingFloatingView(collectionView, indexPath)
-
-            if !isScrolling {
-                let sectionIndex: Int = indexPath.item + DistanceBetween.menuAndRest
-                let indexToMove = IndexPath(item: 0, section: sectionIndex)
-                self.collectionView.selectItem(at: indexToMove, animated: true, scrollPosition: .top)
-            }
-        } else {
-            switch indexPath.section {
-            case 0, 1, 2:
-                return
-            default:
-                if indexPath.item == 0 {
-                    return
-                }
-
-                let storyboard = UIStoryboard(name: "Cart", bundle: nil)
-                guard let cartViewController = storyboard.instantiateViewController(withIdentifier: "CartVC")
-                    as? CartViewController else {
-                        return
-                }
-
-                guard let store = store else {
-                    return
-                }
-
-                let categoryId: String = "category" + String(indexPath.section - DistanceBetween.menuAndRest + 1)
-                let foodIndex: Int = indexPath.item - DistanceBetween.titleAndFoodCell
-
-                guard let selectedFood = foodsOfCategory[categoryId]?[foodIndex] else {
-                    return
-                }
-
-                let storeInfo = StoreInfoModel.init(name: store.name,
-                                                    deliveryTime: store.deliveryTime)
-                let deliveryInfoModel = DeilveryInfoModel.init(locationImage: "https://github.com/boostcamp3-iOS/team-b1/blob/master/images/FoodMarket/airInTheCafe.jpeg?raw=true",
-                                                               detailedAddress: "메리츠 타워",
-                                                               address: "서울특별시 강남구 역삼1동 강남대로 382",
-                                                               deliveryMethod: .pickUpOutside,
-                                                               roomNumber: 101,
-                                                               deliveryTime: store.deliveryTime)
-
-                let cartModel = CartModel.init(storeInfo: storeInfo,
-                                               deilveryInfo: deliveryInfoModel,
-                                               foodOrderedInfo: nil)
-
-                cartViewController.cartModel = cartModel
-                cartViewController.orderInfoModels = [OrderInfoModel.init(amount: 1,
-                                                                          orderName: selectedFood.foodName,
-                                                                          price: selectedFood.basePrice)]
-
-                //            self.present(cartViewController, animated: true, completion: nil)
-                self.navigationController?.pushViewController(cartViewController, animated: true)
-            }
-        }
-    }
-
-    override func collectionView(_ collectionView: UICollectionView, didDeselectItemAt indexPath: IndexPath) {
-        guard let cell = collectionView.cellForItem(at: indexPath) as? MenuCategoryCollectionViewCell else {
-            return
-        }
-        cell.setColor(by: false)
-    }
-
-    // MARK: - ScrollView
-    override func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
-        isScrolling = true
-    }
-
-    override func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
-        isScrolling = false
-    }
-
-    private func getLikeButtonImageName(_ offsetY: CGFloat) -> String {
-        if offsetY > AnimationValues.likeButtonChangeLimit {
-            return "search"
-        } else {
-            return isLiked ? "selectLike" : "like"
-        }
-    }
-
-    override func scrollViewDidScroll(_ scrollView: UIScrollView) {
-        if scrollView != self.menuBarCollectionView {
-
-            let likeButtonImage = UIImage(named: getLikeButtonImageName(scrollView.contentOffset.y))
-
-            self.likeButton.setImage(likeButtonImage, for: .normal)
-
-            if scrollView.contentOffset.y > AnimationValues.scrollLimit
-                && backButton.currentImage == UIImage(named: "arrow") {
-
-                self.collectionView.contentInset = UIEdgeInsets(top: storeTitleView.frame.height - 30,
-                                                                left: ValuesForCollectionView.menuBarZeroInset,
-                                                                bottom: ValuesForCollectionView.menuBarZeroInset,
-                                                                right: ValuesForCollectionView.menuBarZeroInset)
-
-                UIView.animate(withDuration: AnimationValues.duration,
-                               delay: AnimationValues.delay,
-                               options: .curveEaseIn,
-                               animations: {
-                                self.backButton.setImage(UIImage(named: "blackArrow"), for: .normal)
-                                self.menuBarCollectionView.alpha = ValuesForCollectionView.menuBarFullAlpha
-                }, completion: { _ in
-                    self.statusBarStyle = .default
-                })
-
-            } else if scrollView.contentOffset.y < AnimationValues.scrollLimit
-                && backButton.currentImage == UIImage(named: "blackArrow") {
-
-                self.collectionView.contentInset = UIEdgeInsets(top: ValuesForCollectionView.menuBarZeroInset,
-                                                                left: ValuesForCollectionView.menuBarZeroInset,
-                                                                bottom: ValuesForCollectionView.menuBarZeroInset,
-                                                                right: ValuesForCollectionView.menuBarZeroInset)
-
-                UIView.animate(withDuration: AnimationValues.duration,
-                               delay: AnimationValues.delay,
-                               options: .curveEaseIn, animations: {
-                                self.backButton.setImage(UIImage(named: "arrow"), for: .normal)
-                                self.menuBarCollectionView.alpha = ValuesForCollectionView.menuBarZeroAlpha
-                }, completion: { _ in
-                    self.statusBarStyle = .lightContent
-                })
-            }
-
-            self.setNeedsStatusBarAppearanceUpdate()
-            self.view.layoutIfNeeded()
-            handleStoreView(by: scrollView)
-
-            // collectionView.frame.width * 0.9 * 0.5 - 38 => storeTitleView의 높이
-            let yPoint = collectionView.contentOffset.y
-                            + collectionView.frame.width
-                            * ValuesForStoreView.widthMultiplier
-                            * ValuesForStoreView.heightMultiplier
-                            - ValuesForStoreView.distanceBetweenHeightAfterStick + 15
-
-            guard let currentSection = collectionView.indexPathForItem(at: CGPoint(x: 100,
-                                                                                   y: yPoint))?.section else {
-                return
-            }
-
-            isChangedSection = (lastSection != currentSection)
-
-            if currentSection >= menuStartSection && isChangedSection && isScrolling {
-                let lastIndexPath = IndexPath(item: lastSection - DistanceBetween.menuAndRest, section: 0)
-                collectionView(menuBarCollectionView, didDeselectItemAt: lastIndexPath)
-
-                let indexPathToMove = IndexPath(item: currentSection - DistanceBetween.menuAndRest, section: 0)
-                collectionView(menuBarCollectionView, didSelectItemAt: indexPathToMove)
-                lastSection = currentSection
-            }
-        }
-
-    }
-
-    func movingFloatingView(_ collectionView: UICollectionView, _ indexPath: IndexPath) {
-        guard let cell = collectionView.cellForItem(at: indexPath) as? MenuCategoryCollectionViewCell else {
-            return
-        }
-
-        collectionView.bringSubviewToFront(cell)
-
-        let estimatedForm = self.categorys[indexPath.item].estimateCGRect
-
-        floatingViewWidthConstraint.constant = estimatedForm.width + ValuesForFloatingView.widthPadding + 20
-
-        floatingViewLeadingConstraint.constant = cell.frame.minX
-
-        UIView.animate(withDuration: AnimationValues.duration,
-                       delay: AnimationValues.delay,
-                       options: .curveEaseOut,
-                       animations: {
-                        self.menuBarCollectionView.layoutIfNeeded()
-        }, completion: nil)
-
-        cell.setColor(by: true)
-
-        let sectionIndx = IndexPath(item: indexPath.item, section: 0)
-        collectionView.selectItem(at: sectionIndx, animated: true, scrollPosition: .left)
-
-    }
 }
 
 extension StoreCollectionViewController: UICollectionViewDelegateFlowLayout {
+
     func collectionView(_ collectionView: UICollectionView,
                         layout collectionViewLayout: UICollectionViewLayout,
                         sizeForItemAt indexPath: IndexPath) -> CGSize {
-        if collectionView == self.menuBarCollectionView {
-            let estimatedForm = self.categorys[indexPath.item].estimateCGRect
-            print("estimate : \(self.categorys[indexPath.item]), \(estimatedForm.width)")
+        if collectionView == menuBarCollectionView {
+            guard let estimatedForm
+                = menuBarDataSource?.categorys[indexPath.item].estimateCGRect else {
+                return .init()
+            }
 
-            return .init(width: estimatedForm.width + ValuesForFloatingView.widthPadding + 20,
+            return .init(width: estimatedForm.width + ValuesForFloatingView.widthPadding,
                          height: HeightsOfCell.menuBarAndMenu)
         }
 
@@ -738,51 +336,79 @@ extension StoreCollectionViewController: UICollectionViewDelegateFlowLayout {
             return .init(width: view.frame.width - 2 * padding,
                          height: HeightsOfCell.empty)
         case 1:
-            return .init(width: view.frame.width,
+            return .init(width: view.frame.width - 2 * padding,
                          height: view.frame.height * HeightsOfCell.timeAndLocationMultiplier)
         case 2:
-            return .init(width: view.frame.width,
+            return .init(width: view.frame.width - 2 * padding,
                          height: HeightsOfCell.menuBarAndMenu)
         default:
             if indexPath.item != 0 {
-                if self.foods[indexPath.item - 1].foodDescription == "" {
-                    return .init(width: view.frame.width - 2 * padding, height: 120)
-                } else {
-                    let commentString: String = self.foods[indexPath.item - 1].foodDescription + "\n" +
-                        self.foods[indexPath.item - DistanceBetween.titleAndFoodCell].foodName + "\n" +
-                        String(self.foods[indexPath.item - DistanceBetween.titleAndFoodCell].basePrice) + "\n"
-
-                    return .init(width: view.frame.width - 2 * padding, height: commentString.estimateCGRect.height + 45)
+                guard let foods
+                    = mainCollectionViewDataSource?.categoryOfFood["category"
+                                                                    + String(indexPath.section
+                                                                    - DistanceBetween.menuAndRest + 1)] else {
+                    return .init()
                 }
+
+                let foodsIndex = indexPath.item - DistanceBetween.titleAndFoodCell
+
+                return CGSize(width: view.frame.width - 2 * padding,
+                             height: getCellHeight(food: foods[foodsIndex]))
+
             }
-            return .init(width: view.frame.width, height: HeightsOfCell.food)
+            return .init(width: view.frame.width - 2 * padding,
+                         height: HeightsOfCell.food)
         }
     }
+
 }
 
-extension StoreCollectionViewController: SearchBarDelegate {
-    func showSeachBar() {
-        let storyBoard = UIStoryboard(name: "Main", bundle: nil)
-        let searchVC = storyBoard.instantiateViewController(withIdentifier: "searchViewController")
+extension StoreCollectionViewController: OrderButtonClickable {
 
-        self.addChild(searchVC)
-        searchVC.view.frame = self.view.frame
+    func onClickedOrderButton(_ sender: Any) {
+        let cartStoryboard = UIStoryboard(name: "Cart", bundle: nil)
+        guard let cartViewController = cartStoryboard.instantiateViewController(withIdentifier: "CartVC")
+            as? CartViewController else {
+                return
+        }
 
-        self.view.addSubview(searchVC.view)
-        searchVC.didMove(toParent: self)
+        guard let store = mainCollectionViewDataSource?.store else {
+            return
+        }
+
+        let storeInfo = StoreInfoModel.init(name: store.name,
+                                            deliveryTime: store.deliveryTime,
+                                            location: store.location)
+
+        let deliveryInfoModel = DeilveryInfoModel.init(locationImage: "",
+                                                       detailedAddress: "서울특별시 강남구 역삼1동 강남대로 382",
+                                                       address: "메리츠 타워",
+                                                       deliveryMethod: .pickUpOutside,
+                                                       roomNumber: 101)
+
+        cartViewController.cartModel = CartModel.init(storeInfo: storeInfo,
+                                                      deilveryInfo: deliveryInfoModel,
+                                                      foodOrderedInfo: nil)
+
+        cartViewController.orderInfoModels = orderFoods
+
+        cartViewController.storeImageURL = store.lowImageURL
+
+        navigationController?.pushViewController(cartViewController, animated: true)
     }
+
 }
 
-extension StoreCollectionViewController {
-    private func handleStoreView(by scrollView: UIScrollView) {
-        let currentScroll: CGFloat = scrollView.contentOffset.y
-        let headerHeight: CGFloat = HeightsOfHeader.stretchy
+extension StoreCollectionViewController: FoodSelectable {
 
-        changedContentOffset(currentScroll: currentScroll, headerHeight: headerHeight)
+    func foodSelected(orderInfo: OrderInfoModel) {
+        orderFoods.append(orderInfo)
+        totalPrice += orderInfo.amount * orderInfo.price
+        moveCartView.moveCartButton.setAmount(price: totalPrice)
+
+        if !orderFoods.isEmpty {
+            moveCartView.isHidden = false
+        }
     }
 
-    private func changedContentOffset(currentScroll: CGFloat, headerHeight: CGFloat) {
-        self.storeTitleView.changedContentOffset(currentScroll: currentScroll, headerHeight: headerHeight)
-        self.view.layoutIfNeeded()
-    }
 }

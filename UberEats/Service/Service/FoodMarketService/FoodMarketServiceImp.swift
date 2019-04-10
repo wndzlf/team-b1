@@ -21,137 +21,149 @@ internal class FoodMarketServiceImp: FoodMarketService {
     
     private let maximunImage: Int = 4
     
-    func requestFoodMarketMore(completionHandler: @escaping (DataResponse<BusinessFoodMarket>) -> Void) {
-        let requestURL = URL(string: "www.uberEats.com/foodMarket")!
+    func requestFoodMarketMore(section: TableViewSection, completionHandler: @escaping (DataResponse<[StoreForView]>) -> Void) {
+        guard let requestURL = URL(string: "www.uberEats.com/stores") else {
+            return
+        }
+        //여기의 requestURL이 /foods나 /Market이 되고 받은 Mareket을 ServiceImp에서 비즈니스 로직으로 필터하여 표현해 준다.
         network.request(with: requestURL) { ( data, response, requestError) in
-            
             if let requestError = requestError {
                 completionHandler(DataResponse.failed(requestError))
                 return
             }
             
-            if response?.httpStatusCode == .ok {
-                guard let data = data else {
-                    //completionHandler(DataResponse.failed(NetworkError.noDataReceived()))
+            guard response?.httpStatusCode == .ok,
+                let data = data else {
                     return
-                }
-                do {
-                    let foodMarket: FoodMarket = try JSONDecoder().decode(FoodMarket.self, from: data)
-                    
-                    let banners: [AdvertisingBoard] = foodMarket.advertisingBoard
-                    
-                    let stores = foodMarket.stores
-                    let nearestRest: [Store] = caculateDistance(stores: stores)
-                    let recommendFood: [Food] = foodMarket.recommandFoods
-                    let bannerImageURL: [String] = getBannerImageURL(banners: banners)
-                    let expectTimeRest: [Store] = caculateExpectTime(stores: stores)
-                    let newRests: [Store] = foodMarket.newStores
-                    
-                    let caculatedFoodMarket = BusinessFoodMarket(neareRest: nearestRest,
-                                                                 recommendFood: recommendFood,
-                                                                 bannerImages: bannerImageURL,
-                                                                 expectTimeRest: expectTimeRest,
-                                                                 newRests: newRests,
-                                                                 moreRests: stores
-                    )
-                    
-                    DispatchQueue.main.async {
-                        completionHandler(DataResponse.success(caculatedFoodMarket))
-                    }
-                    //FIXME: - Service에서 비즈니스 로직 담당 -> nearestRest 반환하는 로직을 여기서 짜자.
-                } catch {
-                    fatalError()
-                }
-            } else {
-                fatalError()
             }
-        }
-    }
-    
-    func requestFoodMarketMore(dispatchQueue: DispatchQueue?, completionHandler: @escaping (DataResponse<BusinessFoodMarket>) -> Void) {
-        dispatchQueue?.async {
-            self.requestFoodMarketMore(completionHandler: completionHandler)
-        }
-    }
-    
-    func requestFoodMarket(completionHandler: @escaping (DataResponse<BusinessFoodMarket>) -> Void) {
-        let requestURL = URL(string: "www.uberEats.com/foodMarket")!
-        network.request(with: requestURL) { ( data, response, requestError) in
-            
-            if let requestError = requestError {
-                completionHandler(DataResponse.failed(requestError))
-                return
-            }
-            
-            if response?.httpStatusCode == .ok {
-                guard let data = data else {
-                    //completionHandler(DataResponse.failed(NetworkError.noDataReceived()))
-                    return
-                }
-                do {
-                    let foodMarket: FoodMarket = try JSONDecoder().decode(FoodMarket.self, from: data)
-                    
-                    let banners: [AdvertisingBoard] = foodMarket.advertisingBoard
-                    
-                    let moreRestArray = foodMarket.stores
-                    let nearestRest: [Store] = caculateDistance(stores: moreRestArray)
-                    let recommendFood: [Food] = foodMarket.recommandFoods
-                    let bannerImageURL: [String] = getBannerImageURL(banners: banners)
-                    let expectTimeRest: [Store] = caculateExpectTime(stores: moreRestArray)
-                    let newRests: [Store] = foodMarket.newStores
-                    
-                    let nearestRestSlice = nearestRest.prefix(maximunImage)
-                    let nearestRestArray = Array(nearestRestSlice)
-                    
-                    let recommendFoodSlice = recommendFood.prefix(maximunImage)
-                    let recommendFoodArray = Array(recommendFoodSlice)
-                    
-                    let bannerImageSlice = bannerImageURL.prefix(maximunImage)
-                    let bannerImageArry = Array(bannerImageSlice)
-                    
-                    let expectRestSlice = expectTimeRest.prefix(maximunImage)
-                    let expectRestArray = Array(expectRestSlice)
-                    
-                    let newRestSlice = newRests.prefix(maximunImage)
-                    let newRestArray = Array(newRestSlice)
-                    
-                    storeImages(neareRest: nearestRestArray,
-                                recommendFood: recommendFoodArray,
-                                bannerImages: bannerImageArry,
-                                expectTimeRest: expectRestArray,
-                                newRests: newRestArray,
-                                moreRests: moreRestArray
-                    )
+            do {
+                let storeForView: [StoreForView] = try JSONDecoder().decode([StoreForView].self, from: data)
                 
-                    let caculatedFoodMarket = BusinessFoodMarket(neareRest: nearestRestArray,
-                                                                 recommendFood: recommendFoodArray,
-                                                                 bannerImages: bannerImageArry,
-                                                                 expectTimeRest: expectRestArray,
-                                                                 newRests: newRestArray,
-                                                                 moreRests: moreRestArray
-                    )
-                    
-                    DispatchQueue.main.async {
-                        completionHandler(DataResponse.success(caculatedFoodMarket))
+                //여기서 예상시간 30분 이하, 새로운 레스토랑, 인기 레스토랑을 나누자.
+                let nearestRest: [StoreForView] = self.caculateDistance(stores: storeForView)
+                let expectTimeRest: [StoreForView] = self.caculateExpectTime(stores: storeForView)
+                var newRests: [StoreForView] = []
+                
+                for newRest in storeForView {
+                    if newRest.isNewStore {
+                        newRests.append(newRest)
                     }
-                } catch {
-                    fatalError()
                 }
-            } else {
+                
+                var caculateStores: [StoreForView] = []
+                
+                switch section {
+                case .expectedTime:
+                    caculateStores = expectTimeRest
+                case .newRest:
+                    caculateStores = newRests
+                case .nearestRest:
+                    caculateStores = nearestRest
+                default:
+                    break
+                }
+                
+                DispatchQueue.main.async {
+                    completionHandler(DataResponse.success(caculateStores))
+                }
+                //FIXME: - Service에서 비즈니스 로직 담당 -> nearestRest 반환하는 로직을 여기서 짜자.
+            } catch {
+                fatalError()
+            }
+            //FIXME: - Service에서 비즈니스 로직 담당 -> nearestRest 반환하는 로직을 여기서 짜자.
+        }
+    }
+    func requestFoodMarketMore(dispatchQueue: DispatchQueue?, section: TableViewSection,
+                               completionHandler: @escaping (DataResponse<[StoreForView]>) -> Void) {
+        dispatchQueue?.async {
+            self.requestFoodMarketMore(section: section, completionHandler: completionHandler)
+        }
+    }
+    func requestFoodMarket(completionHandler: @escaping (DataResponse<FoodMarketForNetwork>) -> Void) {
+        guard let requestURL = URL(string: "www.uberEats.com/foodMarket") else {
+            return
+        }
+        network.request(with: requestURL) { ( data, response, requestError) in
+            
+            if let requestError = requestError {
+                completionHandler(DataResponse.failed(requestError))
+                return
+            }
+            
+            guard response?.httpStatusCode == .ok,
+                let data = data else {
+                    return
+            }
+            
+            do {
+                let foodMarket: FoodMarketForView = try JSONDecoder().decode(FoodMarketForView.self, from: data)
+                
+                let banners: [AdvertisingBoard] = foodMarket.advertisingBoard
+                
+                let moreRestArray = foodMarket.stores
+                
+                let nearestRest: [StoreForView] = self.caculateDistance(stores: moreRestArray)
+                
+                let recommendFood: [FoodForView] = foodMarket.recommandFoods
+                
+                let bannerImageURL: [String] = self.getBannerImageURL(banners: banners)
+                
+                let expectTimeRest: [StoreForView] = self.caculateExpectTime(stores: moreRestArray)
+                
+                let newRests: [StoreForView] = foodMarket.newStores
+                
+                //5개를 자름
+                let nearestRestSlice = nearestRest.prefix(self.maximunImage)
+                let nearestRestArray = Array(nearestRestSlice)
+                
+                let recommendFoodSlice = recommendFood.prefix(self.maximunImage)
+                let recommendFoodArray = Array(recommendFoodSlice)
+                
+                let bannerImageSlice = bannerImageURL.prefix(self.maximunImage)
+                let bannerImageArry = Array(bannerImageSlice)
+                
+                let expectRestSlice = expectTimeRest.prefix(self.maximunImage)
+                let expectRestArray = Array(expectRestSlice)
+                
+                let newRestSlice = newRests.prefix(self.maximunImage)
+                let newRestArray = Array(newRestSlice)
+                
+                self.storeImages(neareRest: nearestRestArray,
+                                 recommendFood: recommendFoodArray,
+                                 bannerImages: bannerImageArry,
+                                 expectTimeRest: expectRestArray,
+                                 newRests: newRestArray,
+                                 moreRests: moreRestArray
+                )
+                
+                let caculatedFoodMarket = FoodMarketForNetwork(neareRest: nearestRestArray,
+                                                               recommendFood: recommendFoodArray,
+                                                               bannerImages: bannerImageArry,
+                                                               expectTimeRest: expectRestArray,
+                                                               newRests: newRestArray,
+                                                               moreRests: moreRestArray
+                )
+                
+                DispatchQueue.main.async {
+                    completionHandler(DataResponse.success(caculatedFoodMarket))
+                }
+                
+            } catch {
                 fatalError()
             }
         }
     }
     
-    func requestFoodMarket(dispatchQueue: DispatchQueue?, completionHandler: @escaping (DataResponse<BusinessFoodMarket>) -> Void) {
+    func requestFoodMarket(dispatchQueue: DispatchQueue?,
+                           completionHandler: @escaping (DataResponse<FoodMarketForNetwork>) -> Void) {
         dispatchQueue?.async {
             self.requestFoodMarket(completionHandler: completionHandler)
         }
     }
     
-    private func caculateExpectTime(stores: [Store]) -> [Store] {
+    private func caculateExpectTime(stores: [StoreForView]) -> [StoreForView] {
         
-        var expectTimeStore: [Store] = []
+        var expectTimeStore: [StoreForView] = []
         var expectTimes: [String] = []
         
         for store in stores {
@@ -171,8 +183,8 @@ internal class FoodMarketServiceImp: FoodMarketService {
         return expectTimeStore
     }
     
-    private func caculateDistance(stores: [Store]) -> [Store] {
-        var nearestRest: [Store] = []
+    private func caculateDistance(stores: [StoreForView]) -> [StoreForView] {
+        var nearestRest: [StoreForView] = []
         for store in stores {
             let currentLatitude: Double = 37.498146
             let currentLongtitude: Double = 127.027642
@@ -198,14 +210,19 @@ internal class FoodMarketServiceImp: FoodMarketService {
         return bannerImagesURL
     }
     
-    private func storeImages(neareRest: [Store], recommendFood: [Food], bannerImages: [String], expectTimeRest: [Store], newRests: [Store], moreRests: [Store] ) {
+    private func storeImages(neareRest: [StoreForView],
+                             recommendFood: [FoodForView],
+                             bannerImages: [String],
+                             expectTimeRest: [StoreForView],
+                             newRests: [StoreForView],
+                             moreRests: [StoreForView] ) {
         
         for store in moreRests {
             guard let imageURL = URL(string: store.mainImage) else {
                 return
             }
             ImageNetworkManager.shared.getImageByCache(imageURL: imageURL, complection: { (_, _) in
-        
+                
             })
         }
         
@@ -240,6 +257,7 @@ internal class FoodMarketServiceImp: FoodMarketService {
             guard let imageURL = URL(string: store) else {
                 return
             }
+            
             ImageNetworkManager.shared.getImageByCache(imageURL: imageURL, complection: { (_, _) in
                 
             })
@@ -249,22 +267,11 @@ internal class FoodMarketServiceImp: FoodMarketService {
             guard let imageURL = URL(string: store.foodImageURL) else {
                 return
             }
+            
             ImageNetworkManager.shared.getImageByCache(imageURL: imageURL, complection: { (_, _) in
                 
             })
         }
     }
     
-    /*
-    private func caculateNewRest(stores: [Store]) -> [Store] {
-        var newRests: [Store] = []
-        for store in stores {
-            if store.isNewStore {
-                newRests.append(store)
-            }
-        }
-        
-        return newRests
-    }
-     */
 }

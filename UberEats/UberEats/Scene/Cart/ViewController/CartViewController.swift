@@ -16,6 +16,7 @@ class CartViewController: UIViewController {
     fileprivate var cartItems = [[CartItemModelType]](repeating: [],
                                                       count: CartSection.allCases.count)
 
+    var storeImageURL: String?
     var cartModel: CartModel = CartModel.empty() {
         didSet {
             setUpCartModel()
@@ -34,6 +35,8 @@ class CartViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         orderButton.orderButtonClickable = self
+        orderButton.orderButtonText = "주문하기"
+        orderButton.orderInfos = orderInfoModels
         tableView.reloadData()
     }
 
@@ -82,6 +85,7 @@ class CartViewController: UIViewController {
         cartItems[CartSection.order.rawValue] = orderInfoModels.map({
             CartItemModelType.order($0)
         })
+
         orderButton?.orderInfos = orderInfoModels
     }
 
@@ -104,13 +108,21 @@ extension CartViewController: OrderButtonClickable {
             return
         }
 
-        deliveryStartVC.storeName = cartModel.storeInfo.name
-        let deliveryTimes = cartModel.deilveryInfo.deliveryTime.components(separatedBy: "-")
+        let delivererInfo = DelivererInfo.init(name: "중현",
+                                               rate: 100,
+                                               image: UIImage(named: "deliverer"),
+                                               vehicle: "motorbike",
+                                               phoneNumber: "01020313421",
+                                               email: "delivery@gmail.com")
 
-        deliveryStartVC.storeDeliveryTime = Double(deliveryTimes[1])
-        deliveryStartVC.orders = orderInfoModels
+        deliveryStartVC.locationInfoDataSource = LocationInfoDataSourece(storeName: cartModel.storeInfo.name,
+                                                                         orders: orderInfoModels,
+                                                                         delivererInfo: delivererInfo,
+                                                                         locationViewController: deliveryStartVC)
 
-//        self.present(foodItemVC, animated: true, completion: nil)
+        deliveryStartVC.storeLocationInfo = cartModel.storeInfo.location
+        deliveryStartVC.storeImageURL = storeImageURL
+
         self.navigationController?.pushViewController(deliveryStartVC, animated: true)
     }
 

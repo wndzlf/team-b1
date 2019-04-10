@@ -28,14 +28,13 @@ public class MockServer {
             let data = try ResourceController.resourceWithData(path: request.path, root: type(of: self))
 
             let storesData = try ResourceController.resourceWithData(path: "www.uberEats.com/stores", root: type(of: self))
-
             let foodsData = try ResourceController.resourceWithData(path: "www.uberEats.com/foods", root: type(of: self))
 
-            var foodMarket: FoodMarket = try JSONDecoder().decode(FoodMarket.self, from: data)
+            var foodMarket: FoodMarketForView = try JSONDecoder().decode(FoodMarketForView.self, from: data)
 
             do {
-                let stores: [Store] = try JSONDecoder().decode([Store].self, from: storesData)
-                let foods: [Food] = try JSONDecoder().decode([Food].self, from: foodsData)
+                let stores: [StoreForView] = try JSONDecoder().decode([StoreForView].self, from: storesData)
+                let foods: [FoodForView] = try JSONDecoder().decode([FoodForView].self, from: foodsData)
 
                 stores.forEach {
                     $0.isNewStore ? foodMarket.newStores.append($0) : foodMarket.stores.append($0)
@@ -63,20 +62,27 @@ public class MockServer {
                 fatalError("encoding Error")
             }
 
+            Thread.sleep(forTimeInterval: 3)
+
             return String(decoding: result, as: UTF8.self)
         })
 
         try router.get("stores", writtenResponse: { (request) -> Response in
             let storesData = try ResourceController.resourceWithData(path: request.path, root: type(of: self))
 
-            var store: Store?
+            var store: StoreForView?
+            var resStores: [StoreForView]?
 
             do {
-                let stores = try JSONDecoder().decode([Store].self, from: storesData)
 
-                stores.forEach {
-                    if $0.id == request.component.query {
-                        store = $0
+                let stores = try JSONDecoder().decode([StoreForView].self, from: storesData)
+                resStores = stores
+
+                if request.component.query != nil {
+                    stores.forEach {
+                        if $0.id == request.component.query {
+                            store = $0
+                        }
                     }
                 }
 
@@ -84,20 +90,26 @@ public class MockServer {
                 fatalError("decoding Error")
             }
 
-            guard let result = try? JSONEncoder().encode(store) else {
-                fatalError("encoding Error")
+             if request.component.query != nil {
+                guard let result = try? JSONEncoder().encode(store) else {
+                    fatalError("encoding Error")
+                }
+                 return String(decoding: result, as: UTF8.self)
+             } else {
+                guard let result = try? JSONEncoder().encode(resStores) else {
+                    fatalError("encoding Error")
+                }
+                return String(decoding: result, as: UTF8.self)
             }
-
-            return String(decoding: result, as: UTF8.self)
         })
 
         try router.get("foods", writtenResponse: { (request) -> Response in
             let allFoodsData = try ResourceController.resourceWithData(path: request.path, root: type(of: self))
 
-            var foodsOfStore: [Food] = []
+            var foodsOfStore: [FoodForView] = []
 
             do {
-                let allFoods = try JSONDecoder().decode([Food].self, from: allFoodsData)
+                let allFoods = try JSONDecoder().decode([FoodForView].self, from: allFoodsData)
 
                 allFoods.forEach {
                     if $0.storeId == request.component.query {
@@ -115,6 +127,10 @@ public class MockServer {
 
             return String(decoding: result, as: UTF8.self)
         })
+
+        try router.get("option") { (request) -> Response in
+            return try ResourceController.resourceWithString(path: request.path, root: type(of: self))
+        }
     }
 
 }
@@ -137,6 +153,7 @@ extension MockServer: Network {
         } catch let error {
             completionHandler(nil, nil, error)
         }
+
     }
 
 }

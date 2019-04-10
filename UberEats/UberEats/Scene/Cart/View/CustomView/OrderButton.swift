@@ -10,19 +10,36 @@ import UIKit
 
 class OrderButton: UIView {
 
-    private let xibName = "OrderButton"
+    private static let xibName = "OrderButton"
 
-    var orderButtonClickable: OrderButtonClickable?
+    weak var orderButtonClickable: OrderButtonClickable?
 
-    @IBOutlet var orderButtonVIew: UIView!
+    @IBOutlet var orderButtonView: UIView!
 
     @IBOutlet weak var amountLabel: UILabel!
 
+    @IBOutlet weak var orderButton: UIButton!
+
+    private (set) var amount: Int = 1 {
+        didSet {
+            amountLabel.text = "￦\(amount)"
+        }
+    }
+
     var orderInfos: [OrderInfoModel] = [OrderInfoModel]() {
         didSet {
-            let amount = orderInfos.map({ $0.price })
+            let amount = orderInfos.map({ $0.price * $0.amount })
             .reduce(0) { $0 + $1 }
-            amountLabel.text = "$\(amount)"
+            amountLabel.text = "￦\(amount.formattedWithSeparator)"
+        }
+    }
+
+    var orderButtonText: String? {
+        get {
+            return orderButton?.currentTitle
+        }
+        set {
+            orderButton?.setTitle(newValue, for: .normal)
         }
     }
 
@@ -40,13 +57,21 @@ class OrderButton: UIView {
         orderButtonClickable?.onClickedOrderButton(sender)
     }
 
+    func setAmount(quantity: Int, price: Int) {
+        amount = quantity * price
+    }
+
+    func setAmount(price: Int) {
+        amount = price
+    }
+
     private func initNib() {
-        Bundle.main.loadNibNamed(xibName, owner: self, options: nil)
-        orderButtonVIew.fixInView(self)
+        Bundle.main.loadNibNamed(OrderButton.xibName, owner: self, options: nil)
+        orderButtonView.fixInView(self)
     }
 
 }
 
-protocol OrderButtonClickable {
+protocol OrderButtonClickable: class {
     func onClickedOrderButton(_ sender: Any)
 }

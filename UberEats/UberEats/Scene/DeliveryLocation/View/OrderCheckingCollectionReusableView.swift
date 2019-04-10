@@ -13,30 +13,29 @@ class OrderCheckingCollectionReusableView: UICollectionReusableView {
     @IBOutlet weak var storeNameLabel: UILabel!
     @IBOutlet weak var arrivalTimeLabel: UILabel!
     @IBOutlet weak var arrivalTimeTitleLabel: UILabel!
-    @IBOutlet weak var currentProgressSlider: UISlider!
-    @IBOutlet weak var animationSlider: UISlider!
     @IBOutlet weak var currentProgressLabel: UILabel!
+    @IBOutlet weak var deliveryProgressSlider: UISlider!
 
     var sliderTimer = Timer()
 
-    var delegate: ChangeScrollDelegate?
+    weak var changeScrollDelegate: ChangeScrollDelegate?
+    weak var deliveryCompleteDelegate: DeliveryCompleteDelegate?
 
-    var titleName: String? {
+    var progressStatus: ProgressStatus? {
         didSet {
-            guard let titleName = titleName else {
-                return
-            }
-            storeNameLabel.text = titleName
-        }
-    }
 
-    var arrivalTime: String? {
-        didSet {
-            guard let arrivalTime = arrivalTime else {
+            guard let status = progressStatus else {
                 return
             }
 
-            arrivalTimeLabel.text = arrivalTime
+            switch status {
+            case .verifyingOrder:
+                currentProgressLabel.text = "주문 확인중"
+            case .preparingFood:
+                currentProgressLabel.text = "음식 준비중"
+            case .delivering:
+                currentProgressLabel.text = "음식을 배달중입니다."
+            }
         }
     }
 
@@ -46,22 +45,42 @@ class OrderCheckingCollectionReusableView: UICollectionReusableView {
     }
 
     private func setSliderAnimation() {
-        currentProgressSlider.value = 3
-        sliderTimer = Timer.scheduledTimer(timeInterval: 0.5,
-                                           target: self,
-                                           selector: #selector(actionAnimation(_:)),
-                                           userInfo: nil,
-                                           repeats: false)
+        Timer.scheduledTimer(timeInterval: 0,
+                             target: self,
+                             selector: #selector(setupSliderAnimation(_:)),
+                             userInfo: nil,
+                             repeats: false)
     }
 
-    @objc private func actionAnimation(_: Timer) {
-        animationSlider.value = 3
-        UIView.animate(withDuration: 1, delay: 0, options: .repeat, animations: {
-            self.layoutIfNeeded()
-        }, completion: nil)
+    @objc private func setupSliderAnimation(_: Timer) {
+        deliveryProgressSlider.value = 10
+
+        UIView.animate(withDuration: 60,
+                       animations: { [weak self] in
+                        self?.layoutIfNeeded()
+            }, completion: { [weak self] _ in
+                self?.deliveryCompleteDelegate?.moveToFoodMarket()
+        })
     }
 
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
-        delegate?.scrollToTop()
+        changeScrollDelegate?.scrollToTop()
     }
+
+    func configure(storeName: String,
+                   time: String,
+                   status: ProgressStatus,
+                   locationViewController: LocationViewController) {
+        storeNameLabel.text = storeName
+        arrivalTimeLabel.text = time
+        progressStatus = status
+        changeScrollDelegate = locationViewController
+        deliveryCompleteDelegate = locationViewController
+    }
+}
+
+enum ProgressStatus: Int {
+    case verifyingOrder = 0
+    case preparingFood
+    case delivering
 }

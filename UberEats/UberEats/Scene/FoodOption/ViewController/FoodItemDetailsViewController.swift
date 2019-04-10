@@ -25,11 +25,19 @@ class FoodItemDetailsViewController: UIViewController {
 
     private var style: UIStatusBarStyle = .lightContent
 
+    @IBOutlet weak var coverToolBarText: UILabel!
+
     @IBOutlet weak var orderButton: OrderButton!
 
     fileprivate var foodOptionItemModels = [[FoodOptionItemModelType]]()
 
+    @IBOutlet weak var foodImage: UIImageView!
+
+    private var quantity: Int = 0
+
     private let foodOptionService: FoodOptionService = DependencyContainer.share.getDependency(key: .foodOptionService)
+
+    weak var foodSelectable: FoodSelectable?
 
     var foodInfo: FoodInfoModel? {
         didSet {
@@ -52,19 +60,50 @@ class FoodItemDetailsViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
+
         initView()
     }
 
     private func initView() {
+        coverToolBarText.text = foodInfo?.name
+
         self.coveredToolBarBottom.constant = -toolbar.frame.height
 
-        tableView.contentInset = UIEdgeInsets(top: FoodDetailDimensions.stretchableHeaderImageHeight,
+        // 리펙토링할 것 급한 이유로 우선 개발
+        func getHeaderHight() -> CGFloat {
+
+            if (foodInfo?.imageURL == "") {
+                foodImage.isHidden = true
+                return coverToolBar.frame.height / 2
+            } else {
+
+                guard let url = URL(string: foodInfo!.imageURL) else {
+                    return FoodDetailDimensions.stretchableHeaderImageHeight
+                }
+
+                ImageNetworkManager.shared.getImageByCache(imageURL: url) { (image, _) in
+
+                    guard let image = image  else {
+                        fatalError()
+                    }
+
+                    self.foodImage?.image = image
+
+                }
+                return FoodDetailDimensions.stretchableHeaderImageHeight
+            }
+
+        }
+
+        tableView.contentInset = UIEdgeInsets(top: getHeaderHight(),
                                               left: 0,
                                               bottom: 0,
                                               right: 0)
 
         tableView.rowHeight = UITableView.automaticDimension
         orderButton.layer.cornerRadius = FoodDetailDimensions.orderButtonCornerRadius
+        setAmountWithOrderButton(foodInfo: foodInfo)
+        orderButton.orderButtonClickable = self
         loadData()
     }
 
@@ -75,13 +114,16 @@ class FoodItemDetailsViewController: UIViewController {
                     return
                 }
 
-            self?.foodInfo = value.foodInfoModel
             self?.requiredOptions = value.requiredOptionsModel
+
             self?.foodOptionItemModels.append([FoodOptionItemModelType.specialRequests()])
             self?.foodOptionItemModels.append([FoodOptionItemModelType.memo()])
+            self?.foodOptionItemModels.append([FoodOptionItemModelType.quantityControl()])
             self?.foodOptionItemModels.append([FoodOptionItemModelType.empty()])
 
-            self?.tableView.reloadData()
+            DispatchQueue.main.async {
+                self?.tableView.reloadData()
+            }
         }
     }
 
@@ -89,16 +131,39 @@ class FoodItemDetailsViewController: UIViewController {
         self.navigationController?.popViewController(animated: true)
     }
 
-    @IBAction func clickedCartButton(_ sender: Any) {
-        let storyboard = UIStoryboard(name: "Cart", bundle: nil)
-        let cartViewController = storyboard.instantiateViewController(withIdentifier: "CartVC") as! CartViewController
-        self.navigationController?.pushViewController(cartViewController, animated: true)
-    }
-
     override var preferredStatusBarStyle: UIStatusBarStyle {
         return self.style
     }
 
+}
+
+extension FoodItemDetailsViewController: OrderButtonClickable, QuantityValueChanged {
+
+    func quantityValueChanged(newQuantity: Int) {
+        orderButton?.orderButtonText = "카트에 \(newQuantity) 추가"
+        setAmountWithOrderButton(foodInfo: foodInfo, quantity: newQuantity)
+        quantity = newQuantity
+
+    }
+
+    private func setAmountWithOrderButton(foodInfo: FoodInfoModel?, quantity: Int = 1) {
+        guard let foodInfo = foodInfo else {
+            return
+        }
+        orderButton?.setAmount(quantity: quantity, price: foodInfo.price)
+    }
+
+    func onClickedOrderButton(_ sender: Any) {
+        guard let foodInfo = foodInfo else {
+                return
+        }
+
+        let orderInfo = OrderInfoModel.init(amount: quantity, orderName: foodInfo.name, price: foodInfo.price)
+
+        foodSelectable?.foodSelected(orderInfo: orderInfo)
+
+        self.navigationController?.popViewController(animated: true)
+    }
 }
 
 extension FoodItemDetailsViewController: UITableViewDelegate, UITableViewDataSource {
@@ -143,14 +208,24 @@ extension FoodItemDetailsViewController: UITableViewDelegate, UITableViewDataSou
         switch model {
         case .foodInfo(let model):
             setUpFoodOptionCategoryModel(cell, model)
+
         case .requiredOptions(let model):
             setUpFoodOptionCategoryModel(cell, model)
+
         case .additionalOptions(let model):
             setUpFoodOptionCategoryModel(cell, model)
+
         case .optionItem(let model):
-            if let cell = cell as? HavingFoodOptionItem {
-                cell.foodOptionItemModel = model
+            guard let cell = cell as? HavingFoodOptionItem else {
+                preconditionFailure("casting failed : HavingFoodOptionItem")
             }
+            cell.foodOptionItemModel = model
+        case .quantityControl:
+            guard let cell = cell as? QuantityCell else {
+                preconditionFailure("casting failed : QuantityCell")
+            }
+
+            cell.quantitychanged = self
         default:
             return cell
         }
@@ -164,4 +239,8 @@ extension FoodItemDetailsViewController: UITableViewDelegate, UITableViewDataSou
     func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
         return UITableView.automaticDimension
     }
+}
+
+protocol FoodSelectable: class {
+    func foodSelected(orderInfo: OrderInfoModel)
 }

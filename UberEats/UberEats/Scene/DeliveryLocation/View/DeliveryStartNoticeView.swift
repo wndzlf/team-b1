@@ -10,19 +10,15 @@ import UIKit
 
 class DeliveryStartNoticeView: UIView {
     let deliveryStartLabel: UILabel = {
-        let label = UILabel()
-        label.translatesAutoresizingMaskIntoConstraints = false
-        label.text = "밖에서 **님을 만날 준비를 하세요."
+        let label = UILabel().setupWithFontSize(15)
         label.textColor = .white
-        label.font = .systemFont(ofSize: 15)
         label.textAlignment = .center
         return label
     }()
 
     let carImageView: UIImageView = {
-        let imageView = UIImageView()
-        imageView.translatesAutoresizingMaskIntoConstraints = false
-        imageView.image = UIImage(named: "car")
+        let imageView = UIImageView().initImageView("car")
+        imageView.contentMode = .scaleAspectFit
         return imageView
     }()
 
@@ -55,6 +51,10 @@ class DeliveryStartNoticeView: UIView {
             deliveryStartLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -20),
             deliveryStartLabel.leadingAnchor.constraint(equalTo: carImageView.trailingAnchor, constant: 20)
             ])
+    }
+
+    func configure(delivererName: String) {
+        deliveryStartLabel.text = "밖에서 " + delivererName + "님을 만날 준비를 하세요."
     }
 
 }

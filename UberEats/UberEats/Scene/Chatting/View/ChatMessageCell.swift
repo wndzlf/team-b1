@@ -3,14 +3,12 @@ import UIKit
 class ChatMesageCell: UICollectionViewCell {
 
     let messageLabel: UILabel = {
-        let label = UILabel()
-        label.font = UIFont.systemFont(ofSize: 16)
+        let label = UILabel().setupWithFontSize(16)
         label.numberOfLines = 0
-        label.translatesAutoresizingMaskIntoConstraints = false
         return label
     }()
 
-    let chatBubbleView: UIView = {
+    private let chatBubbleView: UIView = {
         let chatBubbleView = UIView()
         chatBubbleView.layer.cornerRadius = 10
         chatBubbleView.layer.masksToBounds = true
@@ -18,7 +16,7 @@ class ChatMesageCell: UICollectionViewCell {
         return chatBubbleView
     }()
 
-    let isReadLabel: UILabel = {
+    private let isReadLabel: UILabel = {
         let isRead = UILabel()
         isRead.translatesAutoresizingMaskIntoConstraints = false
         return isRead
@@ -29,34 +27,48 @@ class ChatMesageCell: UICollectionViewCell {
     var bubbleViewLeadingAnchor: NSLayoutConstraint?
     var bubbleViewHeightAnchor: NSLayoutConstraint?
 
+    var messageViewLeadingAnchor: NSLayoutConstraint?
+    var messageViewTrailingAnchor: NSLayoutConstraint?
+    var messageViewTopAnchor: NSLayoutConstraint?
+    var messageViewBottomAnchor: NSLayoutConstraint?
+
     override init(frame: CGRect) {
         super.init(frame: frame)
 
         addSubview(chatBubbleView)
         addSubview(messageLabel)
 
-        chatBubbleView.topAnchor.constraint(equalTo: topAnchor).isActive = true
-        chatBubbleView.heightAnchor.constraint(equalTo: heightAnchor).isActive = true
-
         bubbleViewWidhAnchor = chatBubbleView.widthAnchor.constraint(equalToConstant: 300)
+
         bubbleViewLeadingAnchor = chatBubbleView.leadingAnchor.constraint(equalTo: leadingAnchor,
                                                                           constant: 3)
+
         bubbleViewTrailingAnchor = chatBubbleView.trailingAnchor.constraint(equalTo: trailingAnchor,
                                                                             constant: -10)
+
         bubbleViewHeightAnchor = chatBubbleView.heightAnchor.constraint(equalToConstant: 1000)
 
-        bubbleViewWidhAnchor?.isActive = true
-        bubbleViewLeadingAnchor?.isActive = true
-        bubbleViewTrailingAnchor?.isActive = true
-        bubbleViewHeightAnchor?.isActive = true
+        messageViewLeadingAnchor = messageLabel.leadingAnchor.constraint(equalTo: chatBubbleView.leadingAnchor,
+                                                                         constant: 10)
 
-        messageLabel.leadingAnchor.constraint(equalTo: chatBubbleView.leadingAnchor,
-                                               constant: 10).isActive = true
-        messageLabel.trailingAnchor.constraint(equalTo: chatBubbleView.trailingAnchor,
-                                                constant: -8).isActive = true
-        messageLabel.topAnchor.constraint(equalTo: chatBubbleView.topAnchor).isActive = true
-        messageLabel.bottomAnchor.constraint(equalTo: chatBubbleView.bottomAnchor).isActive = true
+        messageViewTrailingAnchor = messageLabel.trailingAnchor.constraint(equalTo: chatBubbleView.trailingAnchor,
+                                                                           constant: -8)
 
+        messageViewTopAnchor = messageLabel.topAnchor.constraint(equalTo: chatBubbleView.topAnchor)
+
+        messageViewBottomAnchor = messageLabel.bottomAnchor.constraint(equalTo: chatBubbleView.bottomAnchor)
+
+        NSLayoutConstraint.activate([
+            bubbleViewWidhAnchor ?? .init(),
+            bubbleViewTrailingAnchor ?? .init(),
+            bubbleViewLeadingAnchor ?? .init(),
+            bubbleViewHeightAnchor ?? .init(),
+
+            messageViewLeadingAnchor ?? .init(),
+            messageViewTrailingAnchor ?? .init(),
+            messageViewTopAnchor ?? .init(),
+            messageViewBottomAnchor ?? .init()
+        ])
     }
 
     required init?(coder aDecoder: NSCoder) {
@@ -83,9 +95,9 @@ class ChatMesageCell: UICollectionViewCell {
             bubbleViewLeadingAnchor?.isActive = false
             bubbleViewTrailingAnchor?.isActive = true
         } else {
-            messageLabel.backgroundColor = .blue
+            messageLabel.backgroundColor = UIColor(red: 0.00, green: 0.58, blue: 1.00, alpha: 1.0)
             messageLabel.textColor = .white
-            chatBubbleView.backgroundColor = .blue
+            chatBubbleView.backgroundColor = UIColor(red: 0.00, green: 0.58, blue: 1.00, alpha: 1.0)
             chatBubbleView.layer.maskedCorners = [.layerMaxXMinYCorner,
                                                   .layerMaxXMaxYCorner,
                                                   .layerMinXMaxYCorner]

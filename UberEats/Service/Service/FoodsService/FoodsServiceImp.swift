@@ -18,38 +18,34 @@ class FoodsServiceImp: FoodsService {
         self.network = network
     }
     
-    func requestFoods(query: String, completionHandler: @escaping (DataResponse<BusinessFoods>) -> Void) {
-        guard let requestURL = URL(string: "www.uberEats.com/foods?" + query) else {
+    func requestFoods(storeId: String, completionHandler: @escaping (DataResponse<FoodsForNetwork>) -> Void) {
+        guard let requestURL = URL(string: "www.uberEats.com/foods?" + storeId) else {
             fatalError("URL conversion error")
         }
         
         network.request(with: requestURL) { (data, response, _) in
-            if response?.httpStatusCode == .ok {
+            guard response?.httpStatusCode == .ok,
+            let data = data else {
+                return
+            }
                 
-                guard let data = data else {
-                    return
-                }
+            do {
+                let foods: [FoodForView] = try JSONDecoder().decode([FoodForView].self, from: data)
                 
-                do {
-                    let foods: [Food] = try JSONDecoder().decode([Food].self, from: data)
-                    
-                    let caculatedFoods = BusinessFoods(foods)
-                    
-                    DispatchQueue.main.async {
-                        completionHandler(DataResponse.success(caculatedFoods))
-                    }
-                } catch {
-                    fatalError("decoding Error")
+                let caculatedFoods = FoodsForNetwork(foods)
+                
+                DispatchQueue.main.async {
+                    completionHandler(DataResponse.success(caculatedFoods))
                 }
-            } else {
-                fatalError()
+            } catch {
+                fatalError("decoding Error")
             }
         }
     }
     
-    func requestFoods(query: String, dispatchQueue: DispatchQueue?, completionHandler: @escaping (DataResponse<BusinessFoods>) -> Void) {
-        dispatchQueue?.async {
-            self.requestFoods(query: query, completionHandler: completionHandler)
+    func requestFoods(storeId: String, dispatchQueue: DispatchQueue?, completionHandler: @escaping (DataResponse<FoodsForNetwork>) -> Void) {
+        dispatchQueue?.async { [weak self] in
+            self?.requestFoods(storeId: storeId, completionHandler: completionHandler)
         }
     }
     

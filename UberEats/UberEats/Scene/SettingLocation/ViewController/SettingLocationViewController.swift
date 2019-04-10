@@ -30,7 +30,7 @@ class SettingLocationViewController: UIViewController {
                                           "문 앞까지 배달"),
                         LocationCellModel("icClock",
                                           "메리츠 타워",
-                                          "대한민국 서울특별시 강남구 역삼1동 어쩌구저쩌구",
+                                          "대한민국 서울특별시 강남구 역삼동 강남대로 382",
                                           "차량에서 대기")]
 
     let moment: [MomentCellModel] = [.init(imageName: "icStopwatch", title: "최대한 빨리"),
@@ -57,20 +57,28 @@ class SettingLocationViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        toolBarView.delegate = self
-        tapGesture.delegate = self
+
+        setupDelegateAndDataSource()
         setupLayout()
         setupTableView()
     }
 
-    private func setupTableView() {
-        deliveryDetailTableView.dataSource = self
+    private func setupDelegateAndDataSource() {
+        tapGesture.delegate = self
+        toolBarView.delegate = self
         deliveryDetailTableView.delegate = self
+        deliveryDetailTableView.dataSource = self
+    }
+
+    private func setupTableView() {
 
         //cells
-        deliveryDetailTableView.register(NewAddressTableViewCell.self, forCellReuseIdentifier: SettingLocationCellId.newAddress.rawValue)
-        deliveryDetailTableView.register(LocationTableViewCell.self, forCellReuseIdentifier: SettingLocationCellId.location.rawValue)
-        deliveryDetailTableView.register(MomentTableViewCell.self, forCellReuseIdentifier: SettingLocationCellId.moment.rawValue)
+        deliveryDetailTableView.register(NewAddressTableViewCell.self,
+                                         forCellReuseIdentifier: SettingLocationCellId.newAddress.rawValue)
+        deliveryDetailTableView.register(LocationTableViewCell.self,
+                                         forCellReuseIdentifier: SettingLocationCellId.location.rawValue)
+        deliveryDetailTableView.register(MomentTableViewCell.self,
+                                         forCellReuseIdentifier: SettingLocationCellId.moment.rawValue)
     }
 
     private func setupLayout() {
@@ -101,7 +109,7 @@ class SettingLocationViewController: UIViewController {
     }
 
     @objc private func touchUpCompleteButton(_: UIButton) {
-
+        dismiss(animated: true, completion: nil)
     }
 }
 
@@ -151,11 +159,13 @@ extension SettingLocationViewController: UITableViewDataSource {
 
         switch section {
         case .newAddress:
-            let cell = tableView.dequeueReusableCell(withIdentifier: SettingLocationCellId.newAddress.rawValue, for: indexPath)
+            let cell = tableView.dequeueReusableCell(withIdentifier: SettingLocationCellId.newAddress.rawValue,
+                                                     for: indexPath)
             return cell
         case .location:
-            guard let cell = tableView.dequeueReusableCell(withIdentifier: SettingLocationCellId.location.rawValue, for: indexPath) as? LocationTableViewCell else {
-            return .init()
+            guard let cell = tableView.dequeueReusableCell(withIdentifier: SettingLocationCellId.location.rawValue,
+                                                           for: indexPath) as? LocationTableViewCell else {
+                return .init()
             }
 
             cell.locationInfo = locationInfo[indexPath.row]
@@ -178,7 +188,7 @@ extension SettingLocationViewController: UITableViewDataSource {
             let anotherIndex = IndexPath(row: anotherRow, section: 1)
 
             guard let anotherCell = tableView.cellForRow(at: anotherIndex) as? LocationTableViewCell,
-            let cell = tableView.cellForRow(at: indexPath) as? LocationTableViewCell else {
+                let cell = tableView.cellForRow(at: indexPath) as? LocationTableViewCell else {
                 return
             }
 
@@ -186,7 +196,9 @@ extension SettingLocationViewController: UITableViewDataSource {
                 cell.selectStatusImageView.isHidden = false
             }
 
-            if !cell.selectStatusImageView.isHidden && !anotherCell.selectStatusImageView.isHidden {
+            let isCellsNotSelected = !cell.selectStatusImageView.isHidden && !anotherCell.selectStatusImageView.isHidden
+
+            if isCellsNotSelected {
                 anotherCell.selectStatusImageView.isHidden = anotherCell.selectStatusImageView.isHidden ? false : true
             }
 
@@ -197,7 +209,8 @@ extension SettingLocationViewController: UITableViewDataSource {
 
 extension SettingLocationViewController: UITableViewDelegate {
 
-    func tableView(_ tableView: UITableView, heightForHeaderInSection section: Int) -> CGFloat {
+    func tableView(_ tableView: UITableView,
+                   heightForHeaderInSection section: Int) -> CGFloat {
         guard let section = SectionOfSettingLocation(rawValue: section) else {
             return .init()
         }

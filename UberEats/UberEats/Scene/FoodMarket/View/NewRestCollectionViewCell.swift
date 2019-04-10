@@ -15,24 +15,52 @@ class NewRestCollectionViewCell: UICollectionViewCell {
     @IBOutlet weak var name: UILabel!
     @IBOutlet weak var category: UILabel!
     @IBOutlet weak var deliveryTime: UILabel!
-    //rate
     @IBOutlet weak var promotion: UILabel!
 
-    var newRest: Store? {
+    var confirmURL: URL?
+
+    @IBOutlet weak var star: UIImageView!
+    @IBOutlet weak var starStackView: UIStackView!
+
+    @IBOutlet weak var rater: UILabel!
+
+    @IBOutlet weak var rate: UILabel!
+
+    private let smallCellHeight: CGFloat = 260
+    private let bigCellHeight: CGFloat = 269
+
+    var newRest: StoreForView? {
         didSet {
-            guard let newRest = newRest else {
+            guard let newRests = newRest else {
                 return
             }
 
-            name.text = newRest.name
-            category.text = newRest.category
-            deliveryTime.text = newRest.deliveryTime
-            promotion.text = newRest.promotion
+            guard let cellURL = URL(string: newRests.mainImage) else {
+                return
+            }
+
+            if newRests.promotion == "" {
+                starStackView.isHidden = true
+            } else {
+                starStackView.isHidden = false
+            }
+
+            name.text = newRests.name
+            category.text = newRests.category
+            deliveryTime.text = "\(newRests.deliveryTime) 분"
+            promotion.text = newRests.promotion
+            rate.text = "\(newRests.rate.score)"
+            rater.text = "(\(newRests.rate.numberOfRater))"
+
+            confirmURL = cellURL
         }
+
     }
 
     override func awakeFromNib() {
         super.awakeFromNib()
+
+        star.image = UIImage(named: "star")
 
         self.contentView.layer.cornerRadius = 5
         self.contentView.layer.borderWidth = 1.0
@@ -46,14 +74,14 @@ class NewRestCollectionViewCell: UICollectionViewCell {
 
     func isExistPromotion() -> CGFloat {
         guard let newRest = newRest else {
-            return 260
+            return smallCellHeight
         }
         if newRest.promotion == "" {
             promotion.isHidden = true
-            return 260
+            return smallCellHeight
         } else {
             promotion.isHidden = false
-            return 280.46875
+            return bigCellHeight
         }
     }
 
@@ -62,5 +90,6 @@ class NewRestCollectionViewCell: UICollectionViewCell {
         category.text = ""
         deliveryTime.text = ""
         promotion.text = ""
+        mainImage.image = UIImage(named: "foodPlaceHolder")
     }
 }

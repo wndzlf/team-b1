@@ -7,9 +7,11 @@
 //
 
 import UIKit
+import Common
 
 class TableViewCell: UITableViewCell {
-    @IBOutlet var collectionView: UICollectionView!
+
+    @IBOutlet weak var collectionView: UICollectionView!
 
     public let recommendLabel: UILabel = {
         let label = UILabel()
@@ -21,6 +23,7 @@ class TableViewCell: UITableViewCell {
         guard let tableViewSection = TableViewSection(rawValue: section) else {
             return
         }
+
         switch tableViewSection {
         case .recommendFood:
             recommendLabel.text = "추천 요리"
@@ -37,6 +40,10 @@ class TableViewCell: UITableViewCell {
 
     override func awakeFromNib() {
         super.awakeFromNib()
+        setupLayout()
+    }
+
+    private func setupLayout() {
 
         collectionView.translatesAutoresizingMaskIntoConstraints = false
 
@@ -49,11 +56,11 @@ class TableViewCell: UITableViewCell {
 
         var recommendLabelTopAnchor: NSLayoutConstraint?
         recommendLabelTopAnchor?.identifier = "recommendLabelTopAnchor"
-        recommendLabelTopAnchor = recommendLabel.topAnchor.constraint(equalTo: self.topAnchor, constant: 15)
+        recommendLabelTopAnchor = recommendLabel.topAnchor.constraint(equalTo: topAnchor, constant: 15)
 
         NSLayoutConstraint.activate(
             [
-                recommendLabel.leadingAnchor.constraint(equalTo: self.leadingAnchor, constant: 15),
+                recommendLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 15),
                 recommendLabelTopAnchor ?? .init(),
                 recommendLabel.widthAnchor.constraint(equalToConstant: 200),
                 recommendLabel.heightAnchor.constraint(equalToConstant: 30),
@@ -77,6 +84,6 @@ class TableViewCell: UITableViewCell {
 extension NSLayoutConstraint {
     override open var description: String {
         let id = identifier ?? ""
-        return "id: \(id), constant: \(constant)" //you may print whatever you want here
+        return "id: \(id), constant: \(constant)"
     }
 }

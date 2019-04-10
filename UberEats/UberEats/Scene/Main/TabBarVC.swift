@@ -13,27 +13,30 @@ class TabBarVC: UITabBarController {
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        let itemStroyBoard = UIStoryboard(name: "ItemView", bundle: nil)
-        let firstViewController = itemStroyBoard.instantiateViewController(withIdentifier: "NavigationVC")
-        firstViewController.tabBarItem = UITabBarItem(title: "", image: UIImage(named: "btnTabbarHome"),
-                                                      selectedImage: UIImage(named: "btnTabbarHome"))
+        let foodMarketViewController = UIStoryboard.ItemView.instantiateViewController(withIdentifier: "NavigationVC")
+        foodMarketViewController.tabBarItem = UITabBarItem(title: nil,
+                                                           image: UIImage(named: "btnTabbarHome"),
+                                                           selectedImage: UIImage(named: "btnTabbarHome"))
 
-        let mainStoryBoard = UIStoryboard(name: "Main", bundle: nil)
+        let searchViewController = UIStoryboard.main.instantiateViewController(withIdentifier: "searchView")
 
-        let secondViewController = mainStoryBoard.instantiateViewController(withIdentifier: "searchView")
-
-        secondViewController.tabBarItem = UITabBarItem(title: "", image: UIImage(named: "btnTabbarSearchActive"),
+        searchViewController.tabBarItem = UITabBarItem(title: nil,
+                                                       image: UIImage(named: "btnTabbarSearchActive"),
                                                        selectedImage: UIImage(named: "btnTabbarSearchActive"))
 
-        let thirdViewController = mainStoryBoard.instantiateViewController(withIdentifier: "orderHistory")
-        thirdViewController.tabBarItem = UITabBarItem(title: "", image: UIImage(named: "btnTabbarOrder"),
-                                                      selectedImage: UIImage(named: "btnTabbarOrder"))
+        let orderHistoryViewController = UIStoryboard.main.instantiateViewController(withIdentifier: "orderHistory")
 
-        let fourthViewController = mainStoryBoard.instantiateViewController(withIdentifier: "myPage")
-        fourthViewController.tabBarItem = UITabBarItem(title: "", image: UIImage(named: "btnTabbarMypageActive"),
+        orderHistoryViewController.tabBarItem = UITabBarItem(title: nil,
+                                                             image: UIImage(named: "btnTabbarOrder"),
+                                                             selectedImage: UIImage(named: "btnTabbarOrder"))
+
+        let myPageViewController = UIStoryboard.main.instantiateViewController(withIdentifier: "myPage")
+
+        myPageViewController.tabBarItem = UITabBarItem(title: nil,
+                                                       image: UIImage(named: "btnTabbarMypageActive"),
                                                        selectedImage: UIImage(named: "btnTabbarMypageActive"))
 
-        let tabBarList = [firstViewController, secondViewController, thirdViewController, fourthViewController]
+        let tabBarList = [foodMarketViewController, searchViewController, orderHistoryViewController, myPageViewController]
 
         self.viewControllers = tabBarList
 
@@ -43,6 +46,21 @@ class TabBarVC: UITabBarController {
 
     override func viewWillLayoutSubviews() {
         super.viewWillLayoutSubviews()
+    }
+
+}
+
+extension UIStoryboard {
+    static var main: UIStoryboard {
+        return UIStoryboard(name: "Main", bundle: Bundle.main)
+    }
+
+    static var ItemView: UIStoryboard {
+        return UIStoryboard(name: "ItemView", bundle: Bundle.main)
+    }
+
+    static var chatView: UIStoryboard {
+        return UIStoryboard(name: "Chatting", bundle: Bundle.main)
     }
 
 }

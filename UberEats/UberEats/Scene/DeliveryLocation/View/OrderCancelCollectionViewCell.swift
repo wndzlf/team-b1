@@ -13,11 +13,9 @@ class OrderCancelCollectionViewCell: UICollectionViewCell {
     private static let cancelLabelFontSize: CGFloat = 15
 
     let cancelLabel: UILabel = {
-        let label = UILabel()
-        label.translatesAutoresizingMaskIntoConstraints = false
+        let label = UILabel().setupWithFontSize(OrderCancelCollectionViewCell.cancelLabelFontSize)
         label.text = "주문 취소"
         label.textColor = .gray
-        label.font = .systemFont(ofSize: OrderCancelCollectionViewCell.cancelLabelFontSize)
         return label
     }()
 
@@ -30,13 +28,19 @@ class OrderCancelCollectionViewCell: UICollectionViewCell {
         super.init(coder: aDecoder)
     }
 
-    func setupLayout() {
+    private func setupLayout() {
         backgroundColor = .white
+
         addSubview(cancelLabel)
 
         NSLayoutConstraint.activate([
             cancelLabel.centerXAnchor.constraint(equalTo: centerXAnchor),
             cancelLabel.centerYAnchor.constraint(equalTo: centerYAnchor)
             ])
+    }
+
+    func configure(status: Bool) {
+        cancelLabel.text = "연락처"
+        isHidden = status
     }
 }

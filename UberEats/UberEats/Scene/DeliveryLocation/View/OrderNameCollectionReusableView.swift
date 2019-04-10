@@ -10,18 +10,10 @@ import UIKit
 
 class OrderNameCollectionReusableView: UICollectionReusableView {
 
-    private struct numberForLabel {
-        static let orderNameLabelFontSize: CGFloat = 14
-        static let orderNameLabelLeadingMargin: CGFloat = 20
-        static let orderNameLabelBottomMargin: CGFloat = -15
-    }
-
     let orderNameLabel: UILabel = {
-        let label = UILabel()
-        label.translatesAutoresizingMaskIntoConstraints = false
+        let label = UILabel().setupWithFontSize(NumberForLabel.orderNameLabelFontSize)
         label.text = "#46F45 주문"
         label.textColor = .gray
-        label.font = .systemFont(ofSize: numberForLabel.orderNameLabelFontSize)
         return label
     }()
 
@@ -39,10 +31,18 @@ class OrderNameCollectionReusableView: UICollectionReusableView {
         addSubview(orderNameLabel)
 
         NSLayoutConstraint.activate([
-            orderNameLabel.leadingAnchor.constraint(equalTo: leadingAnchor,
-                                                    constant: numberForLabel.orderNameLabelLeadingMargin),
-            orderNameLabel.bottomAnchor.constraint(equalTo: bottomAnchor,
-                                                   constant: numberForLabel.orderNameLabelBottomMargin)
+            orderNameLabel.leadingAnchor
+                .constraint(equalTo: leadingAnchor,
+                            constant: NumberForLabel.orderNameLabelLeadingMargin),
+            orderNameLabel.bottomAnchor
+                .constraint(equalTo: bottomAnchor,
+                            constant: NumberForLabel.orderNameLabelBottomMargin)
             ])
     }
+}
+
+private struct NumberForLabel {
+    static let orderNameLabelFontSize: CGFloat = 14
+    static let orderNameLabelLeadingMargin: CGFloat = 20
+    static let orderNameLabelBottomMargin: CGFloat = -15
 }

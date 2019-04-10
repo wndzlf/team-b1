@@ -18,36 +18,60 @@ class ExpectTimeCollectionViewCell: UICollectionViewCell {
     @IBOutlet weak var rate: UILabel!
     @IBOutlet weak var promotion: UILabel!
 
-    var expectTimeRest: Store? {
+    @IBOutlet weak var star: UIImageView!
+    @IBOutlet weak var starStackView: UIStackView!
+
+    @IBOutlet weak var rater: UILabel!
+    private let smallCellHeight: CGFloat = 248
+    private let bigCellHeight: CGFloat = 269
+
+    var confirmURL: URL?
+
+    var expectTimeRest: StoreForView? {
         didSet {
             guard let expectTimeRest = expectTimeRest else {
                 return
             }
 
+            guard let cellURL = URL(string: expectTimeRest.mainImage) else {
+                return
+            }
+
             name.text = expectTimeRest.name
             category.text = expectTimeRest.category
-            deliveryTime.text = expectTimeRest.deliveryTime
-            rate.text = "\(expectTimeRest.rate.numberOfRater)"
+            deliveryTime.text = "\(expectTimeRest.deliveryTime) 분"
+            rate.text = "\(expectTimeRest.rate.score)"
             promotion.text = expectTimeRest.promotion
+            rater.text = "(\(expectTimeRest.rate.numberOfRater))"
+
+            if expectTimeRest.promotion == "" {
+                starStackView.isHidden = true
+            } else {
+                starStackView.isHidden = false
+            }
+
+            confirmURL = cellURL
 
         }
     }
 
     func isExistPromotion() -> CGFloat {
         guard let expectTimeRest = expectTimeRest else {
-            return 260
+            return smallCellHeight
         }
         if expectTimeRest.promotion == "" {
             promotion.isHidden = true
-            return 260
+            return smallCellHeight
         } else {
             promotion.isHidden = false
-            return 280.46875
+            return bigCellHeight
         }
     }
 
     override func awakeFromNib() {
         super.awakeFromNib()
+
+        star.image = UIImage(named: "star")
 
         self.contentView.layer.cornerRadius = 5
         self.contentView.layer.borderWidth = 1.0
@@ -57,6 +81,10 @@ class ExpectTimeCollectionViewCell: UICollectionViewCell {
 
         mainImage.layer.cornerRadius = 3
         mainImage.layer.masksToBounds = true
+    }
+
+    override func prepareForReuse() {
+        mainImage.image = UIImage(named: "foodPlaceHolder")
     }
 
 }
